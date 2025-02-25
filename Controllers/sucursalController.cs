@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using P01_2022_SS_650_2021_OF_601.Models;
+using System.Collections;
 
 namespace P01_2022_SS_650_2021_OF_601.Controllers
 {
@@ -20,8 +21,18 @@ namespace P01_2022_SS_650_2021_OF_601.Controllers
         [Route("GetAllSucursales")]
         public IActionResult ListarSucursal()
         {
-            List<sucursal> sucursales = (from s in _parqueoContext.sucursal
-                                              select s).ToList();
+            var sucursales = (from s in _parqueoContext.sucursal
+                                         join u in _parqueoContext.usuario
+                                         on s.id_usuario equals u.id_usuario
+                                              select new
+                                              {
+                                                  s.id_sucursal,
+                                                  administrador = u.nombre,
+                                                  s.nombre,
+                                                  s.direccion,
+                                                  s.telefono,
+                                                  s.numero_espacios
+                                              }).ToList();
 
             if (sucursales.Count() == 0)
             {
@@ -63,7 +74,7 @@ namespace P01_2022_SS_650_2021_OF_601.Controllers
             sucursalActual.nombre = sucursalModificar.nombre;
             sucursalActual.direccion = sucursalModificar.direccion;
             sucursalActual.telefono = sucursalModificar.telefono;
-            sucursalActual.administrador = sucursalModificar.administrador;
+            sucursalActual.id_usuario = sucursalModificar.id_usuario;
             sucursalActual.numero_espacios = sucursalModificar.numero_espacios;
 
             _parqueoContext.Entry(sucursalActual).State = EntityState.Modified;
@@ -92,16 +103,58 @@ namespace P01_2022_SS_650_2021_OF_601.Controllers
             return Ok(usuario);
         }
 
-        //[HttpGet]
-        //[Route("UnoccupiedEspacio/{id_sucursal}/{dias}")]
-        //public IActionResult BuscarEspacioDisp(int id_sucursal, int dias)
-        //{
-        //    var espacios = (from e in _parqueoContext.espacios where e.id_sucursal == id_sucursal select e).ToList();
-        //    var reservas = (from e in _parqueoContext.espacios
-        //                    join r in _parqueoContext.reserva
-        //                    on e.id_espacios equals r.id_espacio
-        //                    where e.id_sucursal == id_sucursal)
-        //}
+        [HttpGet]
+        [Route("UnoccupiedEspacio/{id_sucursal}/{dias}")]
+        public IActionResult BuscarEspacioDisp(int id_sucursal, int dias)
+        {
+            DateTime fechahoy = DateTime.Now;
+            DateOnly fechanew = DateOnly.FromDateTime(fechahoy);
+            var espacios = (from e in _parqueoContext.espacios where e.id_sucursal == id_sucursal select e).ToList();
+            var reservas = (from e in _parqueoContext.espacios
+                            join r in _parqueoContext.reserva
+                            on e.id_espacios equals r.id_espacios
+                            where e.id_sucursal == id_sucursal && r.fecha == fechanew
+                            select new
+                            {
+                                e.id_espacios,
+                                e.numero,
+                                Fecha = r.fecha.ToDateTime(TimeOnly.MinValue),
+                                r.hora_reserva,
+                                r.horas,
+                                r.estado
+                            }).OrderBy(x => x.Fecha).ToList();
+
+            if (espacios == null || reservas == null)
+            {
+                return NotFound();
+            }
+
+            List<string> lista = new List<string>();
+
+            foreach(var esp in espacios)
+            {
+                int num = 1;
+                for (int i = 0; i <= reservas.Count; i++) 
+                {
+                    string desocupado = "";
+                    TimeOnly horaIni = new TimeOnly(0,0);
+                    TimeOnly horaRes = reservas[i].hora_reserva;
+                    TimeOnly horaFin = horaRes.AddHours(reservas[i].horas);
+                    if (horaIni <= horaRes)
+                    {
+                        desocupado = "Espacio numero " + reservas[i].numero + " puede reservar el " + reservas[i].Fecha + " a desde las " + horaIni + " hasta las " + horaRes;
+                    }
+                    else
+                    {
+                        horaIni = horaFin;
+                    }
+
+                    lista.Add(desocupado);
+                }
+            }
+
+            return Ok(lista);
+        }
 
         [HttpPost]
         [Route("AddEspacio")]
@@ -136,7 +189,6 @@ namespace P01_2022_SS_650_2021_OF_601.Controllers
                 espacioActual.numero = espacioModificar.numero;
                 espacioActual.ubicacion = espacioModificar.ubicacion;
                 espacioActual.costo_hora = espacioModificar.costo_hora;
-                espacioActual.estado = espacioModificar.estado;
 
                 _parqueoContext.Entry(espacioActual).State = EntityState.Modified;
                 _parqueoContext.SaveChanges();
