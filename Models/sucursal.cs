@@ -9,7 +9,7 @@ namespace P01_2022_SS_650_2021_OF_601.Models
         public string nombre { get; set; }
         public string direccion { get; set; }
         public string telefono { get; set; }
-        public string administrador { get; set; }
+        public int id_usuario { get; set; }
         public int numero_espacios { get; set; }
     }
 }
